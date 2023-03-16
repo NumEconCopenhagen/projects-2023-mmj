@@ -1,9 +1,9 @@
-# \[Group name\]
+# MMJ
 
 **Group members:**
-- A
-- B
-- C
+- Mads
+- Marius
+- Julie
 
 This repository contains  
 1. Inaugural project. 
