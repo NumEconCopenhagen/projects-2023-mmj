@@ -1,4 +1,3 @@
-
 from types import SimpleNamespace
 
 import numpy as np
@@ -54,7 +53,12 @@ class HouseholdSpecializationModelClass:
         C = par.wM*LM + par.wF*LF
 
         # b. home production
-        H = HM**(1-par.alpha)*HF**par.alpha
+        if par.sigma == 0:
+            H = min(HM, HF)
+        elif par.sigma == 1:
+            H = HM**(1-par.alpha)*HF**par.alpha
+        else:
+            H = ((1-par.alpha)*HM**((par.sigma-1)/par.sigma)+par.alpha*HF**((par.sigma-1)/par.sigma))**((par.sigma)/(par.sigma-1))
 
         # c. total consumption utility
         Q = C**par.omega*H**(1-par.omega)
@@ -63,7 +67,7 @@ class HouseholdSpecializationModelClass:
         # d. disutlity of work
         epsilon_ = 1+1/par.epsilon
         TM = LM+HM
-        TF = LF+HF
+        TF = LF+HF 
         disutility = par.nu*(TM**epsilon_/epsilon_+TF**epsilon_/epsilon_)
         
         return utility - disutility
@@ -105,16 +109,57 @@ class HouseholdSpecializationModelClass:
                 print(f'{k} = {v:6.4f}')
 
         return opt
-
+    
     def solve(self,do_print=False):
         """ solve model continously """
+        
+        opt = SimpleNamespace()
 
-        pass    
+        # define objective function to maximize
+        def objective(x):
+            LM, HM, LF, HF = x
+            return -self.calc_utility(LM, HM, LF, HF)
+
+        # define constraints and bounds
+        def constraints(x):
+            LM, HM, LF, HF = x
+            return [24 - LM - HM, 24 - LF - HF]
+        
+        constraints = ({'type':'ineq', 'fun': constraints})
+        bounds = ((0,24),(0,24),(0,24),(0,24))
+
+        # initial guess
+        initial_guess = [6, 6, 6, 6]
+
+        # call solver
+        solution = optimize.minimize(
+            objective, initial_guess, 
+            method='Nelder-Mead', 
+            bounds=bounds, 
+            constraints=constraints
+            )
+        
+        opt.LM, opt.HM, opt.LF, opt.HF = solution.x
+
+        return opt
+   
 
     def solve_wF_vec(self,discrete=False):
         """ solve model for vector of female wages """
 
-        pass
+        par = self.par
+        sol = self.sol
+
+        # fill out solution vectors for HF and HM
+        for i, wF in enumerate(par.wF_vec):
+            par.wF = wF
+            optimum = self.solve()
+            sol.HF_vec[i] = optimum.HF
+            sol.HM_vec[i] = optimum.HM
+            sol.LF_vec[i] = optimum.LF
+            sol.LM_vec[i] = optimum.LM
+        
+        return sol.HF_vec, sol.HM_vec, sol.LF_vec, sol.LM_vec
 
     def run_regression(self):
         """ run regression """
