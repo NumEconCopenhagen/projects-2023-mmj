@@ -115,12 +115,12 @@ class HouseholdSpecializationModelClass:
         
         opt = SimpleNamespace()
 
-        # define objective function to maximize
+        # Define the objective function
         def objective(x):
             LM, HM, LF, HF = x
             return -self.calc_utility(LM, HM, LF, HF)
 
-        # define constraints and bounds
+        # Define constraints and bounds
         def constraints(x):
             LM, HM, LF, HF = x
             return [24 - LM - HM, 24 - LF - HF]
@@ -128,10 +128,10 @@ class HouseholdSpecializationModelClass:
         constraints = ({'type':'ineq', 'fun': constraints})
         bounds = ((0,24),(0,24),(0,24),(0,24))
 
-        # initial guess
+        # Initial guess
         initial_guess = [6, 6, 6, 6]
 
-        # call solver
+        # Call the solver
         solution = optimize.minimize(
             objective, initial_guess, 
             method='Nelder-Mead', 
@@ -150,7 +150,7 @@ class HouseholdSpecializationModelClass:
         par = self.par
         sol = self.sol
 
-        # fill out solution vectors for HF and HM
+        # Fill out solution vectors for HF and HM
         for i, wF in enumerate(par.wF_vec):
             par.wF = wF
             optimum = self.solve()
