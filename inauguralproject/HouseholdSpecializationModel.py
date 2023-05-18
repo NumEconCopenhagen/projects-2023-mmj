@@ -136,6 +136,7 @@ class HouseholdSpecializationModelClass:
             objective, initial_guess, 
             method='Nelder-Mead', 
             bounds=bounds, 
+            constraints = constraints
             )
         
         opt.LM, opt.HM, opt.LF, opt.HF = solution.x
