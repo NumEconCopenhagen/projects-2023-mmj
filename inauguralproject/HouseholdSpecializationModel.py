@@ -11,30 +11,31 @@ class HouseholdSpecializationModelClass:
     def __init__(self):
         """ setup model """
 
-        # a. create namespaces
+        # create namespaces
         par = self.par = SimpleNamespace()
         sol = self.sol = SimpleNamespace()
 
-        # b. preferences
+        # preferences
         par.rho = 2.0
         par.nu = 0.001
         par.epsilon = 1.0
         par.omega = 0.5 
+        par.phi = 1
 
-        # c. household production
+        # household production
         par.alpha = 0.5
         par.sigma = 1.0
 
-        # d. wages
+        # wages
         par.wM = 1.0
         par.wF = 1.0
         par.wF_vec = np.linspace(0.8,1.2,5)
 
-        # e. targets
+        # targets
         par.beta0_target = 0.4
         par.beta1_target = -0.1
 
-        # f. solution
+        # solution
         sol.LM_vec = np.zeros(par.wF_vec.size)
         sol.HM_vec = np.zeros(par.wF_vec.size)
         sol.LF_vec = np.zeros(par.wF_vec.size)
@@ -49,10 +50,10 @@ class HouseholdSpecializationModelClass:
         par = self.par
         sol = self.sol
 
-        # a. consumption of market goods
-        C = par.wM*LM + par.wF*LF
+        # consumption of market goods
+        C = par.wM*LM + par.phi*par.wF*LF
 
-        # b. home production
+        # home production
         if par.sigma == 0:
             H = min(HM, HF)
         elif par.sigma == 1:
@@ -60,11 +61,11 @@ class HouseholdSpecializationModelClass:
         else:
             H = ((1-par.alpha)*HM**((par.sigma-1)/par.sigma)+par.alpha*HF**((par.sigma-1)/par.sigma))**((par.sigma)/(par.sigma-1))
 
-        # c. total consumption utility
+        # total consumption utility
         Q = C**par.omega*H**(1-par.omega)
         utility = np.fmax(Q,1e-8)**(1-par.rho)/(1-par.rho)
 
-        # d. disutlity of work
+        # disutlity of work
         epsilon_ = 1+1/par.epsilon
         TM = LM+HM
         TF = LF+HF 
@@ -79,7 +80,7 @@ class HouseholdSpecializationModelClass:
         sol = self.sol
         opt = SimpleNamespace()
         
-        # a. all possible choices
+        # all possible choices
         x = np.linspace(0,24,49)
         LM,HM,LF,HF = np.meshgrid(x,x,x,x) # all combinations
     
@@ -88,14 +89,14 @@ class HouseholdSpecializationModelClass:
         LF = LF.ravel()
         HF = HF.ravel()
 
-        # b. calculate utility
+        # calculate utility
         u = self.calc_utility(LM,HM,LF,HF)
     
-        # c. set to minus infinity if constraint is broken
+        # set to minus infinity if constraint is broken
         I = (LM+HM > 24) | (LF+HF > 24) # | is "or"
         u[I] = -np.inf
     
-        # d. find maximizing argument
+        # find maximizing argument
         j = np.argmax(u)
         
         opt.LM = LM[j]
@@ -103,7 +104,7 @@ class HouseholdSpecializationModelClass:
         opt.LF = LF[j]
         opt.HF = HF[j]
 
-        # e. print
+        # print
         if do_print:
             for k,v in opt.__dict__.items():
                 print(f'{k} = {v:6.4f}')
@@ -171,8 +172,76 @@ class HouseholdSpecializationModelClass:
         y = np.log(sol.HF_vec/sol.HM_vec)
         A = np.vstack([np.ones(x.size),x]).T
         sol.beta0,sol.beta1 = np.linalg.lstsq(A,y,rcond=None)[0]
-    
-    def estimate(self,alpha=None,sigma=None):
-        """ estimate alpha and sigma """
 
-        pass
+
+    def estimate(self,alpha=None, phi=None, do_print = False):
+        """ estimate alpha and sigma for variable and fixed alpha """
+
+        # set par and sol 
+        par = self.par
+        sol = self.sol
+
+        # if alpha is not given  
+        if phi == None:
+            # objective function (to minimize) 
+            def objective(y):
+                par.phi = y[1]
+                # varibale sigma 
+                par.sigma = y[0] 
+                par.alpha = alpha
+                # solve solve_wF_vec
+                self.solve_wF_vec()
+                # run regression
+                self.run_regression()
+                # return the diffrence between target beta and estimated 
+                return (par.beta0_target - sol.beta0)**2 + (par.beta1_target - sol.beta1)**2
+            # define objective function 
+            obj = lambda y: objective(y)
+            # guess for alpha and sigma  
+            guess = [0.5]*2
+            # bounds
+            bounds = [(-0.00001,1)]*2
+            # optimizer
+            result = optimize.minimize(obj,
+                                guess,
+                                method='Nelder-Mead',
+                                bounds=bounds)
+            
+            # print result 
+            if do_print:
+                print(f'alpha = {result.x[1].round(4)}')
+                print(f'sigma = {result.x[0].round(4)}')
+                print(f'phi = {result.x[2].round(4)}')
+        
+        # if alpha and phi is given  
+        else:
+            # objective function (to minimize)
+            def objective(y):
+                # chosen alpha
+                par.alpha = alpha 
+                # variables
+                par.sigma = y[0] 
+                # phi
+                par.phi = phi
+                # solve solve_wF_vec
+                self.solve_wF_vec()
+                # run regression 
+                self.run_regression()
+                # return the diffrence between target beta and estimated 
+                return (par.beta0_target - sol.beta0)**2 + (par.beta1_target - sol.beta1)**2
+            # define objective function 
+            obj = lambda y: objective(y)
+            # guess for sigma 
+            guess = [0.5]
+            # bounds 
+            bounds = [(-0.00001,1)]
+            # optimizer
+            result = optimize.minimize(obj,
+                                guess,
+                                method = 'Nelder-Mead',
+                                bounds = bounds)
+            # print result
+            if do_print: 
+                print(f'sigma = {result.x[0].round(4)}')
+
+        return result
